@@ -1,0 +1,120 @@
+'use strict';
+
+const mssql = require('mssql');
+
+/**
+ * Cache storage for Facebook attachments
+ *
+ * @class
+ */
+class AttachmentCache {
+
+    /**
+     *
+     * @param {Promise<mssql.ConnectionPool>} pool
+     */
+    constructor (pool) {
+        this._pool = pool;
+    }
+
+    /**
+     *
+     * @param {string} url
+     * @returns {Promise<number|null>}
+     */
+    async findAttachmentByUrl (url) {
+        const cp = await this._pool;
+        const r = cp.request();
+        const query = 'SELECT attachmentId FROM attachments WHERE attachments.id=@url';
+
+        const { recordset } = await r
+            .input('url', mssql.VarChar, url)
+            .query(query);
+
+        const [res] = recordset;
+
+        return res ? res.attachmentId : null;
+    }
+
+    /**
+     * @param {string} url
+     */
+    async _simpleSelect (url) {
+
+        const cp = await this._pool;
+        const r = cp.request();
+
+        const { recordset } = await r
+            .input('url', mssql.VarChar, url)
+            .query('SELECT attachmentId FROM attachments WHERE id=@url');
+
+        const [attachment] = recordset;
+
+        return attachment;
+    }
+
+    /**
+     * @param {string} url
+     * @param {number} attachmentId
+     */
+
+    async _simpleUpdate (url, attachmentId) {
+
+        const cp = await this._pool;
+        const r = cp.request();
+
+        try {
+            await r
+                .input('url', mssql.VarChar, url)
+                .input('attachmentId', mssql.Int, attachmentId)
+                .query('UPDATE attachments SET id = @url, attachmentId = @attachmentId WHERE id = @url');
+
+        } catch (e) {
+
+            throw e;
+        }
+
+        return true;
+    }
+
+    /**
+     *
+     * @param {string} url
+     * @param {number} attachmentId
+     * @returns {Promise}
+     */
+    async saveAttachmentId (url, attachmentId) {
+
+        const cp = await this._pool;
+        const r = cp.request();
+
+        const recordset = await this._simpleSelect(url);
+
+        if (!recordset) {
+
+            try {
+                await r
+                    .input('url', mssql.VarChar, url)
+                    .input('attachmentId', mssql.Int, attachmentId)
+                    .query('INSERT INTO attachments (id, attachmentId) VALUES (@url, @attachmentId);');
+
+            } catch (e) {
+                // 2627 is unique constraint (includes primary key), 2601 is unique index
+                if (e.number === 2601) {
+                    return this._simpleUpdate(url, attachmentId);
+                }
+
+                throw e;
+            }
+
+        } else {
+
+            return this._simpleUpdate(url, attachmentId);
+        }
+
+        return true;
+    }
+
+}
+
+module.exports = AttachmentCache;

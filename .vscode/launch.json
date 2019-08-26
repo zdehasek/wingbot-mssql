@@ -1,0 +1,61 @@
+{
+    // Use IntelliSense to learn about possible Node.js debug attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Genesys",
+            "program": "${workspaceFolder}/genesys/test.js"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Test libs",
+            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+            "args": [
+                "-u",
+                "bdd",
+                "--timeout",
+                "999999",
+                "--colors",
+                "--recursive",
+                "${workspaceFolder}/test/lib",
+                "${workspaceFolder}/test/genesys"
+            ],
+            "internalConsoleOptions": "openOnSessionStart"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Test Routes",
+            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
+            "args": [
+                "-u",
+                "bdd",
+                "--recursive",
+                "--timeout",
+                "999999",
+                "--colors",
+                "${workspaceFolder}/test/routes"
+            ],
+            "internalConsoleOptions": "openOnSessionStart"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Program",
+            "program": "${workspaceRoot}/bin/www.js",
+            "cwd": "${workspaceRoot}"
+        },
+        {
+            "type": "node",
+            "request": "attach",
+            "name": "Attach to Process",
+            "port": 5858
+        },
+
+    ]
+}

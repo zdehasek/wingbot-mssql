@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es2017",
+        "jsx": "react",
+        "allowSyntheticDefaultImports": true,
+        "checkJs": true,
+        "resolveJsonModule": true
+    },
+    "exclude": [
+        "node_modules",
+        "worker/node_modules",
+        "workerDist",
+        "bin",
+        "trainerContainer",
+        "dist",
+        ".serverless",
+        "node_modules/babel-*",
+        "node_modules/babel",
+        "node_modules/webpack",
+        "node_modules/webpack-*",
+        "node_modules/eslint",
+        "node_modules/eslint-*"
+    ]
+}
