@@ -38,23 +38,6 @@ class AttachmentCache {
 
     /**
      * @param {string} url
-     */
-    async _simpleSelect (url) {
-
-        const cp = await this._pool;
-        const r = cp.request();
-
-        const { recordset } = await r
-            .input('url', mssql.VarChar, url)
-            .query('SELECT attachmentId FROM attachments WHERE id=@url');
-
-        const [attachment] = recordset;
-
-        return attachment;
-    }
-
-    /**
-     * @param {string} url
      * @param {number} attachmentId
      */
 
@@ -88,9 +71,9 @@ class AttachmentCache {
         const cp = await this._pool;
         const r = cp.request();
 
-        const recordset = await this._simpleSelect(url);
+        const oldAttachmentId = await this.findAttachmentByUrl(url);
 
-        if (!recordset) {
+        if (!oldAttachmentId) {
 
             try {
                 await r
@@ -100,12 +83,16 @@ class AttachmentCache {
 
             } catch (e) {
                 // 2627 is unique constraint (includes primary key), 2601 is unique index
-                if (e.number === 2601) {
+                if (e.number === 2601 || e.number === 2627) {
                     return this._simpleUpdate(url, attachmentId);
                 }
 
                 throw e;
             }
+
+        } else if (attachmentId === oldAttachmentId) {
+
+            return true;
 
         } else {
 

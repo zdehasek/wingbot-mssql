@@ -1,7 +1,6 @@
 'use strict';
 
 const assert = require('assert');
-const mssql = require('mssql');
 const pool = require('./testpool');
 
 const BotConfigStorage = require('../src/BotConfigStorage');
@@ -15,8 +14,6 @@ describe('<BotConfigStorage>', () => {
 
         botConfigStorage = new BotConfigStorage(pool);
     });
-
-    //after(() => mongodb(true));
 
     it.only('has api', async () => {
         const api = botConfigStorage.api();
@@ -33,6 +30,7 @@ describe('<BotConfigStorage>', () => {
     });
 
     it.only('should be able to store and fetch, invalidate and update config under same timestamp', async () => {
+        // @TODO save array to the blocks
         const cfgObj = { blocks: 123 };
 
         // save config
@@ -46,7 +44,7 @@ describe('<BotConfigStorage>', () => {
         assert.strictEqual(ts, savedConfig.timestamp);
 
         // try another
-        botConfigStorage = new BotConfigStorage(mongodb);
+        botConfigStorage = new BotConfigStorage(pool);
 
         // load config
         const loadedConfig = await botConfigStorage.getConfig();

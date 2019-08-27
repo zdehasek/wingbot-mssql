@@ -27,7 +27,7 @@ describe('<AttachmentCache>', function () {
     });
 
 
-    it('should be able to store and fetch the cached item', async () => {
+    it.only('should be able to store and fetch the cached item', async () => {
         const nothing = await attachmentCache.findAttachmentByUrl(TEST_URL);
 
         assert.strictEqual(nothing, null);

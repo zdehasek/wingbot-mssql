@@ -10,14 +10,15 @@ module.exports = {
         await query(`CREATE TABLE attachments (
             id varchar(73),
             attachmentId int
+            
+            CONSTRAINT PK_attachments PRIMARY KEY CLUSTERED (id)
+
 
         )`);
 
-       // await query('CREATE CLUSTERED INDEX cid_timestamp ON events (cid, timestamp DESC)');
-       //             CONSTRAINT PK_ PRIMARY KEY NONCLUSTERED (mid)
-
-
         next();
+
+
     },
     down: async (next) => {
         await query('DROP TABLE IF EXISTS attachments');

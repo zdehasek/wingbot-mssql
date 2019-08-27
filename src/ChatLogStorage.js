@@ -1,6 +1,3 @@
-/*
-* @author David Menger
-*/
 'use strict';
 
 const mongodb = require('mongodb'); // eslint-disable-line no-unused-vars

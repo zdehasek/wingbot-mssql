@@ -1,13 +1,8 @@
-/*
-* @author David Menger
-*/
 'use strict';
 
-const mongodb = require('mongodb'); // eslint-disable-line no-unused-vars
+const mssql = require('mssql');
 const tokenFactory = require('./tokenFactory');
 
-const TOKEN_INDEX = 'token-index';
-const USER_INDEX = 'user-page-index';
 
 /**
  * @typedef {Object} Token
@@ -25,62 +20,10 @@ class BotTokenStorage {
 
     /**
      *
-     * @param {mongodb.Db|{():Promise<mongodb.Db>}} mongoDb
-     * @param {string} collectionName
+     * @param {Promise<mssql.ConnectionPool>} pool
      */
-    constructor (mongoDb, collectionName = 'tokens') {
-        this._mongoDb = mongoDb;
-        this._collectionName = collectionName;
-
-        /**
-         * @type {mongodb.Collection}
-         */
-        this._collection = null;
-    }
-
-    /**
-     * @returns {Promise<mongodb.Collection>}
-     */
-    async _getCollection () {
-        if (this._collection === null) {
-            if (typeof this._mongoDb === 'function') {
-                const db = await this._mongoDb();
-                this._collection = db.collection(this._collectionName);
-            } else {
-                this._collection = this._mongoDb.collection(this._collectionName);
-            }
-            let indexExists;
-            try {
-                indexExists = await this._collection.indexExists(TOKEN_INDEX);
-            } catch (e) {
-                indexExists = false;
-            }
-            if (!indexExists) {
-                await this._collection.createIndex({
-                    token: 1
-                }, {
-                    unique: true,
-                    name: TOKEN_INDEX,
-                    dropDups: true
-                });
-            }
-            try {
-                indexExists = await this._collection.indexExists(USER_INDEX);
-            } catch (e) {
-                indexExists = false;
-            }
-            if (!indexExists) {
-                await this._collection.createIndex({
-                    senderId: 1,
-                    pageId: 1
-                }, {
-                    unique: true,
-                    name: USER_INDEX,
-                    dropDups: true
-                });
-            }
-        }
-        return this._collection;
+    constructor (pool) {
+        this._pool = pool;
     }
 
     /**
@@ -92,19 +35,65 @@ class BotTokenStorage {
         if (!token) {
             return null;
         }
-        const c = await this._getCollection();
 
-        const res = await c.findOne({ token });
+        const cp = await this._pool;
+        const r = cp.request();
 
-        if (!res) {
-            return null;
-        }
+        const { recordset } = await r
+            .input('token', mssql.VarChar, token)
+            .query('SELECT senderId, token, pageId FROM tokens WHERE tokens.token=@token');
 
-        return {
+        const [res] = recordset;
+
+        return res ? {
             senderId: res.senderId,
             token: res.token,
             pageId: res.pageId
+        } : null;
+    }
+
+    async _simpleSelect (senderId, pageId) {
+
+        const cp = await this._pool;
+        const r = cp.request();
+
+        const { recordset } = await r
+            .input('senderId', mssql.VarChar, senderId)
+            .input('pageId', mssql.VarChar, pageId)
+            .query('SELECT token FROM tokens WHERE senderId=@senderId AND pageId = @pageId');
+
+        const [res] = recordset;
+
+        return res || null;
+    }
+
+    async _simpleUpSert (senderId, pageId, token, upSertOption) {
+
+        if (!upSertOption && upSertOption !== 'update' && upSertOption !== 'insert') {
+            throw new Error('Missing/Wrong  upSertOption');
+        }
+
+        const cp = await this._pool;
+        const r = cp.request();
+
+        const upSert = {
+            update: 'UPDATE tokens SET token = @token WHERE senderId = @senderId AND pageId = @pageId',
+            insert: 'INSERT INTO tokens (senderId, pageId, token) VALUES (@senderId, @pageId, @token);'
         };
+
+        try {
+            await r
+                .input('senderId', mssql.VarChar, senderId)
+                .input('pageId', mssql.VarChar, pageId)
+                .input('token', mssql.VarChar, token)
+                .query(upSert[upSertOption]);
+
+        } catch (e) {
+
+            throw e;
+        }
+
+        return true;
     }
 
     /**
@@ -121,20 +110,26 @@ class BotTokenStorage {
 
         const temporaryInsecureToken = `>${Math.random() * 0.9}${Date.now()}`;
 
-        const c = await this._getCollection();
+        let res = await this._simpleSelect(senderId, pageId);
+        if (!res) {
 
-        let res = await c.findOneAndUpdate({
-            senderId, pageId
-        }, {
-            $setOnInsert: {
-                token: temporaryInsecureToken
+            try {
+                await this._simpleUpSert(senderId, pageId, temporaryInsecureToken, 'insert');
+
+            } catch (e) {
+                // 2627 is unique constraint (includes primary key), 2601 is unique index
+                if (e.number === 2601 || e.number === 2627) {
+                    await this._simpleUpSert(senderId, pageId, temporaryInsecureToken, 'update');
+                    // @TODO fix this else bug everywhere
+                } else {
+
+                    throw e;
+                }
             }
-        }, {
-            upsert: true,
-            returnOriginal: false
-        });
 
-        res = res.value;
+        }
+
+        res = await this._simpleSelect(senderId, pageId);
 
         // @ts-ignore
         if (res.token === temporaryInsecureToken) {
@@ -143,14 +138,14 @@ class BotTokenStorage {
 
             Object.assign(res, { token });
 
-            await c.updateOne({ senderId, pageId }, { $set: { token } });
+            await this._simpleUpSert(senderId, pageId, token, 'update');
 
         // @ts-ignore
         } else if (res.token.match(/^>[0-9.]+$/)) {
             // probably collision, try it again
             await this._wait(400);
 
-            res = await c.findOne({ senderId, pageId });
+            res = await this._simpleSelect(senderId, pageId);
 
             if (!res) {
                 throw new Error('Cant create token');

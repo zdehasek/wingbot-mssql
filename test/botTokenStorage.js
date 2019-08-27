@@ -1,11 +1,8 @@
-/*
- * @author David Menger
- */
 'use strict';
 
 const assert = require('assert');
 const BotTokenStorage = require('../src/BotTokenStorage');
-const mongodb = require('./mongodb');
+const pool = require('./testpool');
 
 const SENDER_ID = 'hello5';
 const SENDER_ID2 = 'hello6';
@@ -18,22 +15,18 @@ describe('<BotTokenStorage>', function () {
     let bts;
 
     before(async () => {
-        const db = await mongodb();
 
-        bts = new BotTokenStorage(db);
+        bts = new BotTokenStorage(pool);
 
-        try {
-            await db.dropCollection(bts._collectionName);
-        } catch (e) {
-            // suppress
-        }
+        const cp = await pool;
+        const r = cp.request();
+
+        await r.query('TRUNCATE TABLE tokens');
     });
-
-    after(() => mongodb(true));
 
     describe('#getOrCreateToken()', () => {
 
-        it('creates random token', async () => {
+        it.only('creates random token', async () => {
             const randomSenderId = `${Date.now()}`;
 
             const token = await bts.getOrCreateToken(randomSenderId, PAGE_ID);
@@ -42,7 +35,7 @@ describe('<BotTokenStorage>', function () {
             assert.strictEqual(typeof token.token, 'string');
         });
 
-        it('creates token', async () => {
+        it.only('creates token', async () => {
             let token = await bts.getOrCreateToken(SENDER_ID, PAGE_ID, () => Promise.resolve('randomToken'));
 
             assert.deepStrictEqual(token, {
@@ -58,9 +51,11 @@ describe('<BotTokenStorage>', function () {
                 senderId: SENDER_ID,
                 pageId: PAGE_ID
             });
+
         });
 
-        it('avoids collisions', async () => {
+        // @TODO v tomhle testu je chyba, dovolil mi udelat dvakrat stejnej zaznam v SQL
+        it.only('avoids collisions', async () => {
             const tokens = await Promise.all([
                 bts.getOrCreateToken('a', PAGE_ID, () => Promise.resolve('fake')),
                 bts.getOrCreateToken('a', PAGE_ID, () => Promise.resolve('another'))
@@ -74,8 +69,8 @@ describe('<BotTokenStorage>', function () {
 
     describe('#findByToken()', () => {
 
-        it('is able to find token', async () => {
-            bts = new BotTokenStorage(mongodb);
+        it.only('is able to find token', async () => {
+            bts = new BotTokenStorage(pool);
 
             let token = await bts.findByToken('nonexisting');
 
@@ -92,7 +87,7 @@ describe('<BotTokenStorage>', function () {
             });
         });
 
-        it('no token returns null response', async () => {
+        it.only('no token returns null response', async () => {
             const token = await bts.findByToken('');
 
             assert.strictEqual(token, null);
