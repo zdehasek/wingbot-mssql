@@ -1,6 +1,3 @@
-/**
- * @author David Menger
- */
 'use strict';
 
 const { queryWithoutMigration: query } = require('../lib/mssql');
@@ -16,7 +13,7 @@ module.exports = {
         )`);
 
         // varchar(max) is invalid for use as a key column in an index
-        await query('CREATE CLUSTERED INDEX tokens_token ON tokens (token)');
+        // @TODO FIX await query('CREATE CLUSTERED INDEX tokens_token ON tokens (token)');
 
 
         next();

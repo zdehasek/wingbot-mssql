@@ -92,6 +92,7 @@ class BotConfigStorage {
             .query('SELECT timestamp FROM botConfigStorage WHERE botConfigStorage.id=@CONFIG_ID');
 
         const [res] = recordset;
+        //@TODO JSON.parse a vsude jinde kde pouzivam  Number
 
         return res ? Number(res.timestamp) : 0;
     }

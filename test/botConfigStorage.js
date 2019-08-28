@@ -15,7 +15,7 @@ describe('<BotConfigStorage>', () => {
         botConfigStorage = new BotConfigStorage(pool);
     });
 
-    it.only('has api', async () => {
+    it('has api', async () => {
         const api = botConfigStorage.api();
 
         assert.equal(typeof api.updateBot, 'function');
@@ -29,7 +29,7 @@ describe('<BotConfigStorage>', () => {
         assert.strictEqual(res2, null);
     });
 
-    it.only('should be able to store and fetch, invalidate and update config under same timestamp', async () => {
+    it('should be able to store and fetch, invalidate and update config under same timestamp', async () => {
         // @TODO save array to the blocks
         const cfgObj = { blocks: 123 };
 

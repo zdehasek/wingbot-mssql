@@ -5,7 +5,7 @@
 
 const assert = require('assert');
 const ChatLogStorage = require('../src/ChatLogStorage');
-const mongodb = require('./mongodb');
+const pool = require('./testpool');
 
 const SENDER_ID = 'hello';
 
@@ -16,12 +16,11 @@ describe('<ChatLogStorage>', function () {
     let chl;
 
     before(async () => {
-        const db = await mongodb();
 
-        chl = new ChatLogStorage(db);
+        chl = new ChatLogStorage(pool);
     });
 
-    after(() => mongodb(true));
+    //after(() => mongodb(true));
 
     describe('#log()', () => {
 
@@ -39,13 +38,16 @@ describe('<ChatLogStorage>', function () {
 
     describe('#getInteractions()', () => {
 
-        it('should return stored interactions', async () => {
+        it.only('should return stored interactions', async () => {
             const timestamp = Date.now();
             const firstTs = timestamp - 1000;
             await chl.log('abc', [{ response: 1 }], { req: 1 }, { pageId: '2', timestamp: firstTs });
             await chl.log('abc', [{ response: 2 }], { req: 2 }, { pageId: '2', timestamp });
 
             let data = await chl.getInteractions('abc', '2', 2);
+            const [obj] = data;
+            //const obj2 = JSON.parse(obj.toString());
+            console.log("DATA",obj);
 
             assert.deepEqual(data, [
                 {

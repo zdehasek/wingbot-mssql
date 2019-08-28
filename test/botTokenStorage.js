@@ -26,7 +26,7 @@ describe('<BotTokenStorage>', function () {
 
     describe('#getOrCreateToken()', () => {
 
-        it.only('creates random token', async () => {
+        it('creates random token', async () => {
             const randomSenderId = `${Date.now()}`;
 
             const token = await bts.getOrCreateToken(randomSenderId, PAGE_ID);
@@ -35,7 +35,7 @@ describe('<BotTokenStorage>', function () {
             assert.strictEqual(typeof token.token, 'string');
         });
 
-        it.only('creates token', async () => {
+        it('creates token', async () => {
             let token = await bts.getOrCreateToken(SENDER_ID, PAGE_ID, () => Promise.resolve('randomToken'));
 
             assert.deepStrictEqual(token, {
@@ -55,7 +55,7 @@ describe('<BotTokenStorage>', function () {
         });
 
         // @TODO v tomhle testu je chyba, dovolil mi udelat dvakrat stejnej zaznam v SQL
-        it.only('avoids collisions', async () => {
+        it('avoids collisions', async () => {
             const tokens = await Promise.all([
                 bts.getOrCreateToken('a', PAGE_ID, () => Promise.resolve('fake')),
                 bts.getOrCreateToken('a', PAGE_ID, () => Promise.resolve('another'))
@@ -69,7 +69,7 @@ describe('<BotTokenStorage>', function () {
 
     describe('#findByToken()', () => {
 
-        it.only('is able to find token', async () => {
+        it('is able to find token', async () => {
             bts = new BotTokenStorage(pool);
 
             let token = await bts.findByToken('nonexisting');
@@ -87,7 +87,7 @@ describe('<BotTokenStorage>', function () {
             });
         });
 
-        it.only('no token returns null response', async () => {
+        it('no token returns null response', async () => {
             const token = await bts.findByToken('');
 
             assert.strictEqual(token, null);

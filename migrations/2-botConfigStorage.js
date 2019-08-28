@@ -1,6 +1,3 @@
-/**
- * @author David Menger
- */
 'use strict';
 
 const { queryWithoutMigration: query } = require('../lib/mssql');
