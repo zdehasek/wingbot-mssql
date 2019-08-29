@@ -1,24 +1,12 @@
-/*
-* @author David Menger
-*/
 'use strict';
 
-const mongodb = require('mongodb'); // eslint-disable-line no-unused-vars
-
-const USER_INDEX = 'user-page-index';
-const LAST_INTERACTION_INDEX = 'last-interaction';
-const SEARCH = 'search-text';
+const mssql = require('mssql');
 
 /**
  * @typedef {Object} State
  * @prop {string} senderId
  * @prop {string} pageId
  * @prop {Object} state
- */
-
-/**
- * @typedef {Object} StateCondition
- * @prop {string} [search]
  */
 
 /**
@@ -29,76 +17,10 @@ const SEARCH = 'search-text';
 class StateStorage {
 
     /**
-     *
-     * @param {mongodb.Db|{():Promise<mongodb.Db>}} mongoDb
-     * @param {string} collectionName
+     * @param {Promise<mssql.ConnectionPool>} pool
      */
-    constructor (mongoDb, collectionName = 'states') {
-        this._mongoDb = mongoDb;
-        this._collectionName = collectionName;
-
-        /**
-         * @type {mongodb.Collection}
-         */
-        this._collection = null;
-        this._doesNotSupportTextIndex = false;
-    }
-
-    /**
-     * @returns {Promise<mongodb.Collection>}
-     */
-    async _getCollection () {
-        if (this._collection === null) {
-            if (typeof this._mongoDb === 'function') {
-                const db = await this._mongoDb();
-                this._collection = db.collection(this._collectionName);
-            } else {
-                this._collection = this._mongoDb.collection(this._collectionName);
-            }
-
-            await this._ensureIndexes([
-                {
-                    index: { senderId: 1, pageId: 1 },
-                    options: { name: USER_INDEX, unique: true, dropDups: true }
-                },
-                {
-                    index: { lastInteraction: -1 },
-                    options: { name: LAST_INTERACTION_INDEX }
-                },
-                {
-                    index: { '$**': 'text' },
-                    options: { name: SEARCH },
-                    isTextIndex: true
-                }
-            ]);
-        }
-        return this._collection;
-    }
-
-    async _ensureIndexes (indexes) {
-        let existing;
-        try {
-            existing = await this._collection.indexes();
-        } catch (e) {
-            existing = [];
-        }
-
-        await Promise.all(existing
-            .filter(e => !['_id_', '_id'].includes(e.name) && !indexes.some(i => e.name === i.options.name))
-            .map(e => this._collection.dropIndex(e.name)));
-
-        await Promise.all(indexes
-            .filter(i => !existing.some(e => e.name === i.options.name))
-            .map(i => this._collection
-                .createIndex(i.index, i.options)
-                // @ts-ignore
-                .catch((e) => {
-                    if (i.isTextIndex) {
-                        this._doesNotSupportTextIndex = true;
-                    } else {
-                        throw e;
-                    }
-                })));
+    constructor (pool) {
+        this._pool = pool;
     }
 
     /**
@@ -108,8 +30,83 @@ class StateStorage {
      * @returns {Promise<State|null>}
      */
     async getState (senderId, pageId) {
-        const c = await this._getCollection();
-        return c.findOne({ senderId, pageId }, { projection: { _id: 0 } });
+
+        return this._simpleSelect(senderId, pageId);
+
+    }
+
+    async _simpleSelect (senderId, pageId, lock = null) {
+
+        const cp = await this._pool;
+        const r = cp.request();
+
+        let query = 'SELECT * FROM states WHERE senderId=@senderId AND pageId=@pageId';
+
+        if (lock !== null) {
+            r.input('lock', mssql.NVarChar, lock);
+            query += ' AND lock < @lock';
+
+        }
+
+        let { recordset } = await r
+            .input('senderId', mssql.VarChar, senderId)
+            .input('pageId', mssql.VarChar, pageId)
+            .query(query);
+
+
+        // @ts-ignore
+        recordset = recordset.map((o) => {
+            // eslint-disable-next-line no-param-reassign
+            o.state = JSON.parse(o.state);
+
+            return o;
+        });
+
+        const [res] = recordset;
+
+        return res || null;
+    }
+
+    async _simpleUpSert (
+        upSertOption,
+        senderId,
+        pageId,
+        lock,
+        lastSendError = null,
+        itsOff = null,
+        state = null
+    ) {
+
+        if (!upSertOption && upSertOption !== 'update' && upSertOption !== 'insert') {
+            throw new Error('Missing/Wrong  upSertOption');
+        }
+
+        const cp = await this._pool;
+        const r = cp.request();
+
+
+        const upSert = {
+            update: 'UPDATE states SET lock = @lock WHERE senderId = @senderId AND pageId = @pageId',
+            insert: 'INSERT INTO states VALUES (@senderId, @pageId, @lock, @lastSendError, @itsOff, @state, @lastInteraction)'
+        };
+
+        try {
+            await r
+                .input('senderId', mssql.VarChar, senderId)
+                .input('pageId', mssql.VarChar, pageId)
+                .input('lock', mssql.NVarChar, lock)
+                .input('lastSendError', mssql.NVarChar, lastSendError)
+                .input('itsOff', mssql.VarChar, itsOff)
+                .input('state', mssql.NVarChar, state)
+                .input('lastInteraction', mssql.NVarChar, null)
+                .query(upSert[upSertOption]);
+
+        } catch (e) {
+
+            throw e;
+        }
+
+        return true;
     }
 
     /**
@@ -122,40 +119,43 @@ class StateStorage {
      * @returns {Promise<Object>} - conversation state
      */
     async getOrCreateAndLock (senderId, pageId, defaultState = {}, timeout = 300) {
+
         const now = Date.now();
+        const lt = now - timeout;
 
-        const c = await this._getCollection();
+        // calling function WITH lock
+        const res = await this._simpleSelect(senderId, pageId, lt);
 
-        const $setOnInsert = {
-            state: defaultState,
-            lastSendError: null,
-            off: false
-        };
+        if (!res) {
 
-        const $set = {
-            lock: now
-        };
+            try {
 
-        const $lt = now - timeout;
+                await this._simpleUpSert('insert', senderId, pageId, now, null, false, JSON.stringify(defaultState));
 
-        const res = await c.findOneAndUpdate({
-            senderId,
-            pageId,
-            lock: { $lt }
-        }, {
-            $setOnInsert,
-            $set
-        }, {
-            upsert: true,
-            returnOriginal: false,
-            projection: {
-                _id: 0
+            } catch (e) {
+
+                // 2627 is unique constraint (includes primary key), 2601 is unique index
+                if (e.number === 2601 || e.number === 2627) {
+                    // for compatibility with MongDB connnector sending same error code
+                    e.code = 11000;
+                }
+
+                throw e;
             }
-        });
 
-        return res.value;
+        } else {
+
+            await this._simpleUpSert('update', senderId, pageId, now);
+
+        }
+        // calling function withou lock So I'm albe to retrun row even it's loked
+        return this._simpleSelect(senderId, pageId);
     }
 
+    // @TODO Davide, getStates jsem uz nestihl.
+    // našel jsem že MS SQL má taky metodu SKIP a LIMIT které se tu používají v MongoDB
+    // https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/ef/language-reference/skip-entity-sql
+    // https://docs.microsoft.com/en-us/dotnet/framework/data/adonet/ef/language-reference/limit-entity-sql
     /**
      *
      * @param {StateCondition} condition
@@ -261,17 +261,20 @@ class StateStorage {
             lock: 0
         });
 
-        const c = await this._getCollection();
-
         const { senderId, pageId } = state;
 
-        await c.updateOne({
-            senderId, pageId
-        }, {
-            $set: state
-        }, {
-            upsert: true
-        });
+        try {
+            await this._simpleUpSert('insert', senderId, pageId, state.lock);
+
+        } catch (e) {
+            // 2627 is unique constraint (includes primary key), 2601 is unique index
+            if (e.number === 2601 || e.number === 2627) {
+                await this._simpleUpSert('update', senderId, pageId, state.lock);
+
+            } else {
+                throw e;
+            }
+        }
 
         return state;
     }

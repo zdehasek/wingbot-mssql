@@ -2,8 +2,6 @@
 
 const mssql = require('mssql');
 
-const PAGE_SENDER_TIMESTAMP = 'page_sender_timestamp';
-
 /**
  * Storage for conversation logs
  *
@@ -14,15 +12,13 @@ class ChatLogStorage {
     /**
      *
      * @param {Promise<mssql.ConnectionPool>} pool
+     * @param {{error:Function}} [log] - console like logger
      */
     constructor (pool, log = console) {
         this._pool = pool;
         this._log = log;
         this.muteErrors = true;
     }
-
-
-    // @TODO create indexes pageId, senderId, timestamp
 
     /**
      * @returns {Promise<mssql.Table>}
@@ -58,8 +54,8 @@ class ChatLogStorage {
             pageId
         };
 
-        //const orderBackwards = startAt && !endAt;
-        
+        const orderBackwards = startAt && !endAt;
+
         if (startAt || endAt) {
             Object.assign(q, { timestamp: {} });
         }
@@ -67,47 +63,52 @@ class ChatLogStorage {
         if (startAt) {
             Object.assign(q.timestamp, { $gte: startAt });
             r.input('startAt', mssql.BigInt, startAt);
-            query += ' AND time > @startAt';
+            query += ' AND timestamp >= @startAt';
         }
 
         if (endAt) {
             Object.assign(q.timestamp, { $lte: endAt });
-            query += ' AND time < @startAt';
+            r.input('endAt', mssql.VarChar, endAt);
+            query += ' AND timestamp <= @endAt';
 
         }
 
-        query += ' ORDER BY time';
+        query += ' ORDER BY timestamp';
 
         // orderBackwards
         if (startAt && !endAt) {
-            query += ' DESC';
+            query += ' ASC';
 
         } else {
-            query += ' ASC';
+            query += ' DESC';
 
         }
 
-       // console.log("QQQQQQQQQQQQQQQ",q);
-       // console.log("queryqueryqueryquery",query);
-
-        const { recordset } = await r
+        let { recordset } = await r
             .input('senderId', mssql.VarChar, senderId)
             .input('pageId', mssql.VarChar, pageId)
             .query(query);
 
-        /*
-        const res = await c.find(q)
-            .limit(limit)
-            .sort({ timestamp: orderBackwards ? 1 : -1 })
-            .project({ _id: 0, time: 0 })
-            .toArray();
+        // @ts-ignore
+        recordset = recordset.map((o) => {
+            // eslint-disable-next-line no-param-reassign
+            o.responses = JSON.parse(o.responses);
+            // eslint-disable-next-line no-param-reassign
+            o.request = JSON.parse(o.request);
+            // eslint-disable-next-line no-param-reassign
+            o.timestamp = JSON.parse(o.timestamp);
+            if (o.err === null) {
+                delete o.err; // eslint-disable-line no-param-reassign
+            }
+            return o;
+        });
 
         if (!orderBackwards) {
-            res.reverse();
+            recordset.reverse();
         }
-        */
-        //return res;
-        return recordset
+
+        // @ts-ignore
+        return recordset;
     }
 
     /**
@@ -129,17 +130,14 @@ class ChatLogStorage {
 
         Object.assign(log, metadata);
 
-        console.log("log.request", log);
-        console.log("LOGFYYYYY",JSON.stringify(log));
-
-
-        const query = `INSERT INTO chatlogs 
-                    (senderId, time, request, responses, pageId, timestamp, err) 
+        const query = `
+                    INSERT INTO chatlogs 
+                        (senderId, time, request, responses, pageId, timestamp, err) 
                     VALUES
-                    (@senderId, @time, @request, @responses, @pageId, @timestamp, @err)`;
+                        (@senderId, @time, @request, @responses, @pageId, @timestamp, @err)`;
 
 
-        this._pool
+        return this._pool
             .then(pool => pool.request()
                 .input('senderId', mssql.VarChar, log.senderId)
                 .input('time', mssql.VarChar, log.time)
@@ -148,7 +146,8 @@ class ChatLogStorage {
                 .input('pageId', mssql.VarChar, log.pageId || null)
                 .input('timestamp', mssql.VarChar, log.timestamp || null)
                 .input('err', mssql.VarChar, log.err || null)
-                .query(query)).catch((err) => {
+                .query(query))
+            .catch((err) => {
                 this._log.error('Failed to store chat log', err, log);
 
                 if (!this.muteErrors) {
@@ -180,8 +179,22 @@ class ChatLogStorage {
 
         Object.assign(log, metadata);
 
-        return this._getCollection()
-            .then(c => c.insertOne(log))
+        const query = `INSERT INTO chatlogs 
+                        (senderId, time, request, responses, pageId, timestamp, err) 
+                    VALUES
+                        (@senderId, @time, @request, @responses, @pageId, @timestamp, @err)`;
+
+
+        return this._pool
+            .then(pool => pool.request()
+                .input('senderId', mssql.VarChar, log.senderId)
+                .input('time', mssql.VarChar, log.time)
+                .input('request', mssql.NVarChar, JSON.stringify(log.request))
+                .input('responses', mssql.NVarChar, JSON.stringify(log.responses))
+                .input('pageId', mssql.VarChar, log.pageId || null)
+                .input('timestamp', mssql.VarChar, log.timestamp || null)
+                .input('err', mssql.VarChar, log.err || null)
+                .query(query))
             .catch((storeError) => {
                 this._log.error('Failed to store chat log', storeError, log);
 
@@ -189,6 +202,7 @@ class ChatLogStorage {
                     throw storeError;
                 }
             });
+
     }
 
 }

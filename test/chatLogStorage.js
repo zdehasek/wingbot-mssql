@@ -1,6 +1,3 @@
-/*
- * @author David Menger
- */
 'use strict';
 
 const assert = require('assert');
@@ -18,9 +15,8 @@ describe('<ChatLogStorage>', function () {
     before(async () => {
 
         chl = new ChatLogStorage(pool);
-    });
 
-    //after(() => mongodb(true));
+    });
 
     describe('#log()', () => {
 
@@ -38,16 +34,13 @@ describe('<ChatLogStorage>', function () {
 
     describe('#getInteractions()', () => {
 
-        it.only('should return stored interactions', async () => {
+        it('should return stored interactions', async () => {
             const timestamp = Date.now();
             const firstTs = timestamp - 1000;
             await chl.log('abc', [{ response: 1 }], { req: 1 }, { pageId: '2', timestamp: firstTs });
             await chl.log('abc', [{ response: 2 }], { req: 2 }, { pageId: '2', timestamp });
 
             let data = await chl.getInteractions('abc', '2', 2);
-            const [obj] = data;
-            //const obj2 = JSON.parse(obj.toString());
-            console.log("DATA",obj);
 
             assert.deepEqual(data, [
                 {
@@ -139,7 +132,7 @@ describe('<ChatLogStorage>', function () {
         });
 
         it('mutes errors', async () => {
-            chl = new ChatLogStorage(mongodb);
+            chl = new ChatLogStorage(pool);
 
             await chl.error(new Error('something failed'), SENDER_ID);
         });

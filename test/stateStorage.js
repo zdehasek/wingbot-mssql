@@ -1,10 +1,7 @@
-/*
- * @author David Menger
- */
 'use strict';
 
 const assert = require('assert');
-const mongodb = require('./mongodb');
+const pool = require('./testpool');
 const StateStorage = require('../src/StateStorage');
 
 const SENDER_ID = 'hello';
@@ -18,18 +15,13 @@ describe('<StateStorage>', function () {
     let ss;
 
     beforeEach(async () => {
-        const db = await mongodb();
 
-        ss = new StateStorage(db);
+        ss = new StateStorage(pool);
+        const cp = await pool;
+        const r = cp.request();
 
-        try {
-            await db.dropCollection(ss._collectionName);
-        } catch (e) {
-            // suppress
-        }
+        await r.query('TRUNCATE TABLE states');
     });
-
-    after(() => mongodb(true));
 
     describe('#getOrCreateAndLock()', () => {
 
@@ -60,7 +52,7 @@ describe('<StateStorage>', function () {
     describe('#getState()', () => {
 
         it('returns zero state', async () => {
-            ss = new StateStorage(mongodb);
+            ss = new StateStorage(pool);
 
             const nonexisting = await ss.getState('nonexisting', 'random');
 
@@ -81,7 +73,7 @@ describe('<StateStorage>', function () {
     describe('#saveState()', () => {
 
         it('is able to recover state from db and encodes dates', async () => {
-            ss = new StateStorage(mongodb);
+            ss = new StateStorage(pool);
 
             const state = {
                 dateTest: new Date(),
@@ -117,7 +109,7 @@ describe('<StateStorage>', function () {
         const lastInteraction2 = new Date(Date.now() - 1000);
 
         beforeEach(async () => {
-            storage = new StateStorage(mongodb);
+            storage = new StateStorage(pool);
 
             const first = await storage.getOrCreateAndLock(SENDER_ID, PAGE_ID, firstState);
             const second = await storage.getOrCreateAndLock(SENDER_ID2, PAGE_ID, secondState);
