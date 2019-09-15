@@ -14,7 +14,7 @@ describe('<ChatLogStorage>', function () {
 
     before(async () => {
 
-        chl = new ChatLogStorage(pool);
+        chl = new ChatLogStorage(pool.connection());
 
     });
 
@@ -132,7 +132,7 @@ describe('<ChatLogStorage>', function () {
         });
 
         it('mutes errors', async () => {
-            chl = new ChatLogStorage(pool);
+            chl = new ChatLogStorage(pool.connection());
 
             await chl.error(new Error('something failed'), SENDER_ID);
         });

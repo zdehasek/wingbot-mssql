@@ -16,9 +16,9 @@ describe('<BotTokenStorage>', function () {
 
     before(async () => {
 
-        bts = new BotTokenStorage(pool);
+        bts = new BotTokenStorage(pool.connection());
 
-        const cp = await pool;
+        const cp = await pool.connection();
         const r = cp.request();
 
         await r.query('TRUNCATE TABLE tokens');
@@ -70,7 +70,7 @@ describe('<BotTokenStorage>', function () {
     describe('#findByToken()', () => {
 
         it('is able to find token', async () => {
-            bts = new BotTokenStorage(pool);
+            bts = new BotTokenStorage(pool.connection());
 
             let token = await bts.findByToken('nonexisting');
 

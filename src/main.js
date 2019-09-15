@@ -8,6 +8,7 @@ const ChatLogStorage = require('./ChatLogStorage');
 const BotConfigStorage = require('./BotConfigStorage');
 const NotificationsStorage = require('./NotificationsStorage');
 const AttachmentCache = require('./AttachmentCache');
+const MsSql = require('./MsSql');
 
 module.exports = {
     StateStorage,
@@ -15,5 +16,6 @@ module.exports = {
     ChatLogStorage,
     BotConfigStorage,
     AttachmentCache,
-    NotificationsStorage
+    NotificationsStorage,
+    MsSql
 };

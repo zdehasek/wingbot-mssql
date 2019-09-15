@@ -1,10 +1,8 @@
 'use strict';
 
-const { queryWithoutMigration: query } = require('../lib/mssql');
-
 module.exports = {
-    up: async (next) => {
-        await query(`CREATE TABLE tokens (
+    async up (next) {
+        await this.query(`CREATE TABLE tokens (
             senderId varchar(73),
             pageId varchar(73),
             token varchar(400)
@@ -18,8 +16,8 @@ module.exports = {
 
         next();
     },
-    down: async (next) => {
-        await query('DROP TABLE IF EXISTS tokens');
+    async down (next) {
+        await this.query('DROP TABLE IF EXISTS tokens');
         next();
     }
 };

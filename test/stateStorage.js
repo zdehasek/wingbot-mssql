@@ -16,8 +16,8 @@ describe('<StateStorage>', function () {
 
     beforeEach(async () => {
 
-        ss = new StateStorage(pool);
-        const cp = await pool;
+        ss = new StateStorage(pool.connection());
+        const cp = await pool.connection();
         const r = cp.request();
 
         await r.query('TRUNCATE TABLE states');
@@ -52,7 +52,7 @@ describe('<StateStorage>', function () {
     describe('#getState()', () => {
 
         it('returns zero state', async () => {
-            ss = new StateStorage(pool);
+            ss = new StateStorage(pool.connection());
 
             const nonexisting = await ss.getState('nonexisting', 'random');
 
@@ -73,7 +73,7 @@ describe('<StateStorage>', function () {
     describe('#saveState()', () => {
 
         it('is able to recover state from db and encodes dates', async () => {
-            ss = new StateStorage(pool);
+            ss = new StateStorage(pool.connection());
 
             const state = {
                 dateTest: new Date(),
@@ -109,17 +109,19 @@ describe('<StateStorage>', function () {
         const lastInteraction2 = new Date(Date.now() - 1000);
 
         beforeEach(async () => {
-            storage = new StateStorage(pool);
+            storage = new StateStorage(pool.connection());
 
             const first = await storage.getOrCreateAndLock(SENDER_ID, PAGE_ID, firstState);
             const second = await storage.getOrCreateAndLock(SENDER_ID2, PAGE_ID, secondState);
 
-            await storage.saveState(Object.assign({}, first, {
+            await storage.saveState({
+                ...first,
                 lastInteraction
-            }));
-            await storage.saveState(Object.assign({}, second, {
+            });
+            await storage.saveState({
+                ...second,
                 lastInteraction: lastInteraction2
-            }));
+            });
         });
 
         it('should return states by last interaction', async () => {
