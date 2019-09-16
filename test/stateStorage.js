@@ -36,8 +36,23 @@ describe('<StateStorage>', function () {
                 thrownError = e;
             }
 
+            try {
+                res = await ss.getOrCreateAndLock(SENDER_ID, PAGE_ID, {}, 2000);
+            } catch (e) {
+                thrownError = e;
+            }
+
             assert.ok(thrownError !== null);
             assert.strictEqual(thrownError.code, 11000);
+
+            assert.strictEqual(typeof res, 'object');
+            assert.strictEqual(res.senderId, SENDER_ID);
+            assert.strictEqual(res.pageId, PAGE_ID);
+            assert.deepStrictEqual(res.state, {});
+
+            await ss.saveState(res);
+
+            res = await ss.getOrCreateAndLock(SENDER_ID, PAGE_ID, {}, 2000);
 
             assert.strictEqual(typeof res, 'object');
             assert.strictEqual(res.senderId, SENDER_ID);
