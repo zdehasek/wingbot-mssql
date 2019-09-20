@@ -1,6 +1,10 @@
 'use strict';
 
 const mssql = require('mssql');
+const deepMap = require('./deepMap');
+
+const ISODatePattern = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(([+-]\d\d:\d\d)|Z)?$/i;
+
 
 /**
  * @typedef {Object} State
@@ -31,82 +35,23 @@ class StateStorage {
      */
     async getState (senderId, pageId) {
 
-        return this._simpleSelect(senderId, pageId);
-
-    }
-
-    async _simpleSelect (senderId, pageId, lock = null) {
-
         const cp = await this._pool;
-        const r = cp.request();
 
-        let query = 'SELECT * FROM states WHERE senderId=@senderId AND pageId=@pageId';
-
-        if (lock !== null) {
-            r.input('lock', mssql.NVarChar, lock);
-            query += ' AND lock < @lock';
-
-        }
-
-        let { recordset } = await r
+        const { recordset } = await cp.request()
             .input('senderId', mssql.VarChar, senderId)
             .input('pageId', mssql.VarChar, pageId)
-            .query(query);
-
-
-        // @ts-ignore
-        recordset = recordset.map((o) => {
-            // eslint-disable-next-line no-param-reassign
-            o.state = JSON.parse(o.state);
-
-            return o;
-        });
+            .query('SELECT TOP 1 * FROM states WHERE senderId=@senderId AND pageId=@pageId');
 
         const [res] = recordset;
 
-        return res || null;
-    }
-
-    async _simpleUpSert (
-        upSertOption,
-        senderId,
-        pageId,
-        lock,
-        lastSendError = null,
-        itsOff = null,
-        state = null
-    ) {
-
-        if (!upSertOption && upSertOption !== 'update' && upSertOption !== 'insert') {
-            throw new Error('Missing/Wrong  upSertOption');
+        if (!res) {
+            return null;
         }
 
-        const cp = await this._pool;
-        const r = cp.request();
-
-
-        const upSert = {
-            update: 'UPDATE states SET lock = @lock WHERE senderId = @senderId AND pageId = @pageId',
-            insert: 'INSERT INTO states VALUES (@senderId, @pageId, @lock, @lastSendError, @itsOff, @state, @lastInteraction)'
+        return {
+            ...res,
+            state: this._decodeState(res.state)
         };
-
-        try {
-            await r
-                .input('senderId', mssql.VarChar, senderId)
-                .input('pageId', mssql.VarChar, pageId)
-                .input('lock', mssql.NVarChar, lock)
-                .input('lastSendError', mssql.NVarChar, lastSendError)
-                .input('itsOff', mssql.VarChar, itsOff)
-                .input('state', mssql.NVarChar, state)
-                .input('lastInteraction', mssql.NVarChar, null)
-                .query(upSert[upSertOption]);
-
-        } catch (e) {
-
-            throw e;
-        }
-
-        return true;
     }
 
     /**
@@ -114,42 +59,116 @@ class StateStorage {
      *
      * @param {string} senderId - sender identifier
      * @param {string} pageId - page identifier
-     * @param {Object} [defaultState] - default state of the conversation
+     * @param {object} [defaultState] - default state of the conversation
      * @param {number} [timeout=300] - given default state
-     * @returns {Promise<Object>} - conversation state
+     * @returns {Promise<object>} - conversation state
      */
     async getOrCreateAndLock (senderId, pageId, defaultState = {}, timeout = 300) {
 
         const now = Date.now();
-        const lt = now - timeout;
+        const threshold = now - timeout;
 
-        // calling function WITH lock
-        const res = await this._simpleSelect(senderId, pageId, lt);
+        const cp = await this._pool;
 
-        if (!res) {
+        const res = await cp.request()
+            .input('senderId', mssql.VarChar, senderId)
+            .input('pageId', mssql.VarChar, pageId)
+            .input('lock', mssql.BigInt, now)
+            .input('threshold', mssql.BigInt, threshold)
+            .query('UPDATE states SET lock = @lock WHERE senderId = @senderId AND pageId = @pageId AND lock < @threshold');
 
-            try {
+        if (res.rowsAffected[0] === 1) {
+            // successfully locked
 
-                await this._simpleUpSert('insert', senderId, pageId, now, null, false, JSON.stringify(defaultState));
+            return this.getState(senderId, pageId);
+        }
 
-            } catch (e) {
+        try {
+            // not exists or conflict
+            await this._insertState(senderId, pageId, defaultState, now);
 
-                // 2627 is unique constraint (includes primary key), 2601 is unique index
-                if (e.number === 2601 || e.number === 2627) {
-                    // for compatibility with MongDB connnector sending same error code
-                    e.code = 11000;
-                }
-
-                throw e;
+            return {
+                senderId,
+                pageId,
+                lock: now,
+                state: { ...defaultState }
+            };
+        } catch (e) {
+            // 2627 is unique constraint (includes primary key), 2601 is unique index
+            if (e.number === 2601 || e.number === 2627) {
+                // for compatibility with MongDB connnector sending same error code
+                e.code = 11000;
             }
 
-        } else {
-
-            await this._simpleUpSert('update', senderId, pageId, now);
-
+            throw e;
         }
-        // calling function withou lock So I'm albe to retrun row even it's loked
-        return this._simpleSelect(senderId, pageId);
+    }
+
+    /**
+     * Save the state to database
+     *
+     * @param {object} state - conversation state
+     * @returns {Promise<object>}
+     */
+    async saveState (state) {
+        const {
+            senderId, pageId, lastSendError, off = false, lastInteraction
+        } = state;
+
+        const cp = await this._pool;
+
+        const res = await cp.request()
+            .input('senderId', mssql.VarChar, senderId)
+            .input('pageId', mssql.VarChar, pageId)
+            .input('lastSendError', mssql.NVarChar, lastSendError)
+            .input('state', mssql.NVarChar, this._encodeState(state.state))
+            .input('itsOff', mssql.VarChar, off ? 'true' : 'false')
+            .input('lastInteraction', mssql.BigInt, lastInteraction)
+            .query('UPDATE states SET lock = 0, state = @state, itsOff = @itsOff, lastInteraction = @lastInteraction WHERE senderId = @senderId AND pageId = @pageId');
+
+
+        if (res.rowsAffected[0] === 0) {
+            // nothing was updated so let's insert it
+
+            await this._insertState(senderId, pageId, state.state, 0, lastInteraction, off);
+        }
+
+        return state;
+    }
+
+    _decodeState (state) {
+        const obj = JSON.parse(state);
+
+        return deepMap(obj, (value) => {
+            if (typeof value === 'string' && ISODatePattern.test(value)) {
+                return new Date(value);
+            }
+            return value;
+        });
+    }
+
+    _encodeState (state) {
+        const obj = deepMap(state, (value) => {
+            if (value instanceof Date) {
+                return value.toISOString();
+            }
+            return value;
+        });
+
+        return JSON.stringify(obj);
+    }
+
+    async _insertState (senderId, pageId, state, lock = 0, lastInteraction = null, off = false) {
+        const cp = await this._pool;
+
+        return cp.request()
+            .input('senderId', mssql.VarChar, senderId)
+            .input('pageId', mssql.VarChar, pageId)
+            .input('lock', mssql.BigInt, lock)
+            .input('state', mssql.NVarChar, this._encodeState(state))
+            .input('itsOff', mssql.VarChar, off ? 'true' : 'false')
+            .input('lastInteraction', mssql.BigInt, lastInteraction)
+            .query('INSERT INTO states (senderId, pageId, lock, state, itsOff, lastInteraction) VALUES (@senderId, @pageId, @lock, @state, @itsOff, @lastInteraction)');
     }
 
     // @TODO Davide, getStates jsem uz nestihl.
@@ -246,35 +265,6 @@ class StateStorage {
         delete state.off; // eslint-disable-line
         delete state.lastSendError // eslint-disable-line
         delete state.score // eslint-disable-line
-
-        return state;
-    }
-
-    /**
-     * Save the state to database
-     *
-     * @param {Object} state - conversation state
-     * @returns {Promise<Object>}
-     */
-    async saveState (state) {
-        Object.assign(state, {
-            lock: 0
-        });
-
-        const { senderId, pageId } = state;
-
-        try {
-            await this._simpleUpSert('insert', senderId, pageId, state.lock);
-
-        } catch (e) {
-            // 2627 is unique constraint (includes primary key), 2601 is unique index
-            if (e.number === 2601 || e.number === 2627) {
-                await this._simpleUpSert('update', senderId, pageId, state.lock);
-
-            } else {
-                throw e;
-            }
-        }
 
         return state;
     }

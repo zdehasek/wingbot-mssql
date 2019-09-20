@@ -3,8 +3,11 @@
  */
 'use strict';
 
+const loadMigrationsIntoSet = require('migrate/lib/load-migrations');
 const migrate = require('migrate');
 const mssql = require('mssql');
+const { format } = require('sqlstring');
+const MigrationSet = require('./MigrationSet');
 
 class Migrate {
 
@@ -22,8 +25,8 @@ class Migrate {
 
     load (cb) {
         this._load()
-            .then(set => cb(null, set))
-            .catch(e => cb(e));
+            .then((set) => cb(null, set))
+            .catch((e) => cb(e));
     }
 
     async _load () {
@@ -46,7 +49,7 @@ class Migrate {
     save (set, cb) {
         this._save(set)
             .then(() => cb())
-            .catch(e => cb(e));
+            .catch((e) => cb(e));
     }
 
     async _save (set) {
@@ -65,14 +68,29 @@ class Migrate {
     }
 
     migrate () {
+        const query = async (string, ...args) => {
+            const q = await this._pool;
+
+            const r = q.request();
+
+            return r.query(format(string, args));
+        };
+
+        const set = new MigrationSet(this, query);
+
+        // @ts-ignore
+        migrate.set = set;
+
         return new Promise((resolve, reject) => {
-            migrate.load({
-                stateStore: this,
+            loadMigrationsIntoSet({
+                set,
+                store: this,
                 migrationsDirectory: this._migrationsPath
-            }, (err, set) => {
+            }, (err) => {
                 if (err) {
                     reject(err);
                 } else {
+                    // @ts-ignore
                     set.up((er) => {
                         if (er) {
                             reject(er);

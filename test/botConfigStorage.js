@@ -12,7 +12,7 @@ describe('<BotConfigStorage>', () => {
 
     before(async () => {
 
-        botConfigStorage = new BotConfigStorage(pool);
+        botConfigStorage = new BotConfigStorage(pool.connection());
     });
 
     it('has api', async () => {
@@ -44,7 +44,7 @@ describe('<BotConfigStorage>', () => {
         assert.strictEqual(ts, savedConfig.timestamp);
 
         // try another
-        botConfigStorage = new BotConfigStorage(pool);
+        botConfigStorage = new BotConfigStorage(pool.connection());
 
         // load config
         const loadedConfig = await botConfigStorage.getConfig();

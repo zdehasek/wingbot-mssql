@@ -13,12 +13,12 @@ describe('<AttachmentCache>', function () {
 
     before(async () => {
 
-        attachmentCache = new AttachmentCache(pool);
+        attachmentCache = new AttachmentCache(pool.connection());
     });
 
     after(async () => {
 
-        const cp = await pool;
+        const cp = await pool.connection();
 
         const r = cp.request();
 

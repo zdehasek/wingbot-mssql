@@ -7,13 +7,7 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Genesys",
-            "program": "${workspaceFolder}/genesys/test.js"
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Test libs",
+            "name": "Test",
             "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
             "args": [
                 "-u",
@@ -22,33 +16,9 @@
                 "999999",
                 "--colors",
                 "--recursive",
-                "${workspaceFolder}/test/lib",
-                "${workspaceFolder}/test/genesys"
+                "${workspaceFolder}/test",
             ],
             "internalConsoleOptions": "openOnSessionStart"
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Test Routes",
-            "program": "${workspaceFolder}/node_modules/mocha/bin/_mocha",
-            "args": [
-                "-u",
-                "bdd",
-                "--recursive",
-                "--timeout",
-                "999999",
-                "--colors",
-                "${workspaceFolder}/test/routes"
-            ],
-            "internalConsoleOptions": "openOnSessionStart"
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Launch Program",
-            "program": "${workspaceRoot}/bin/www.js",
-            "cwd": "${workspaceRoot}"
         },
         {
             "type": "node",
