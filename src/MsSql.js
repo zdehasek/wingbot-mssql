@@ -14,7 +14,7 @@ class MsSql {
      *
      * @param {object} config
      * @param {string} config.user
-     * @param {string} config.password;
+     * @param {string|Promise<string>} config.password;
      * @param {string} config.server
      * @param {number} config.port
      * @param {string} config.database
@@ -33,7 +33,19 @@ class MsSql {
 
     async _createConnectionPoll () {
         try {
-            const cp = new mssql.ConnectionPool(this._config);
+            let config;
+            if (this._config.password instanceof Promise) {
+                const password = await this._config.password;
+                config = {
+                    ...this._config,
+                    password
+                };
+            } else {
+                config = this._config;
+            }
+
+            // @ts-ignore
+            const cp = new mssql.ConnectionPool(config);
 
             cp.on('error', (err) => {
                 this._log.error('MSSQL ERROR', err);
