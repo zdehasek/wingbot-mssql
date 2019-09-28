@@ -8,10 +8,15 @@ module.exports = {
             time varchar(73),
             request nvarchar(max),
             responses nvarchar(max),
+            metadata nvarchar(max),
             timestamp bigint,
+            flag varchar(3),
             err varchar(73)
 
         )`);
+
+        await this.query('CREATE INDEX page_sender_timestamp ON chatlogs (pageId, senderId, timestamp DESC)');
+        await this.query('CREATE INDEX flag ON chatlogs (flag, timestamp DESC)');
 
         next();
     },

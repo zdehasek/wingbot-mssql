@@ -61,7 +61,7 @@ describe('<BotTokenStorage>', function () {
                 bts.getOrCreateToken('a', PAGE_ID, () => Promise.resolve('another'))
             ]);
 
-            assert.ok(tokens.every(t => t.senderId === 'a'
+            assert.ok(tokens.every((t) => t.senderId === 'a'
                 && (t.token === 'fake' || t.token === 'another')));
         });
 

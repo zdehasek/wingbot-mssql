@@ -29,17 +29,11 @@ class BotConfigStorage {
         const cp = await this._pool;
         const r = cp.request();
 
-        try {
-            await r
-                .input('CONFIG_ID', mssql.VarChar, CONFIG_ID)
-                .input('blocks', mssql.Int, newConfig.blocks)
-                .input('timestamp', mssql.BigInt, newConfig.timestamp)
-                .query('UPDATE attachments SET id = @url, attachmentId = @attachmentId WHERE id = @CONFIG_ID');
-
-        } catch (e) {
-
-            throw e;
-        }
+        await r
+            .input('CONFIG_ID', mssql.VarChar, CONFIG_ID)
+            .input('blocks', mssql.Int, newConfig.blocks)
+            .input('timestamp', mssql.BigInt, newConfig.timestamp)
+            .query('UPDATE attachments SET id = @url, attachmentId = @attachmentId WHERE id = @CONFIG_ID');
 
         return true;
     }
@@ -92,7 +86,7 @@ class BotConfigStorage {
             .query('SELECT timestamp FROM botConfigStorage WHERE botConfigStorage.id=@CONFIG_ID');
 
         const [res] = recordset;
-        //@TODO JSON.parse a vsude jinde kde pouzivam  Number
+        // @TODO JSON.parse a vsude jinde kde pouzivam  Number
 
         return res ? Number(res.timestamp) : 0;
     }
@@ -140,7 +134,7 @@ class BotConfigStorage {
     }
 
     /**
-     * @returns {Promise<Object|null>}
+     * @returns {Promise<object|null>}
      */
     async getConfig () {
 

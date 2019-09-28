@@ -15,7 +15,7 @@ function deepMap (obj, iterator) {
     } else {
         iterate = Object.keys(obj);
         res = {};
-        keyVal = key => ({ key, val: obj[key] });
+        keyVal = (key) => ({ key, val: obj[key] });
     }
 
     return iterate

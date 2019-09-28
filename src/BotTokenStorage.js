@@ -5,7 +5,7 @@ const tokenFactory = require('./tokenFactory');
 
 
 /**
- * @typedef {Object} Token
+ * @typedef {object} Token
  * @prop {string} senderId
  * @prop {string} pageId
  * @prop {string} token
@@ -81,17 +81,12 @@ class BotTokenStorage {
             insert: 'INSERT INTO tokens (senderId, pageId, token) VALUES (@senderId, @pageId, @token);'
         };
 
-        try {
-            await r
-                .input('senderId', mssql.VarChar, senderId)
-                .input('pageId', mssql.VarChar, pageId)
-                .input('token', mssql.VarChar, token)
-                .query(upSert[upSertOption]);
+        await r
+            .input('senderId', mssql.VarChar, senderId)
+            .input('pageId', mssql.VarChar, pageId)
+            .input('token', mssql.VarChar, token)
+            .query(upSert[upSertOption]);
 
-        } catch (e) {
-
-            throw e;
-        }
 
         return true;
     }
@@ -161,7 +156,7 @@ class BotTokenStorage {
     }
 
     _wait (ms) {
-        return new Promise(r => setTimeout(r, ms));
+        return new Promise((r) => setTimeout(r, ms));
     }
 
 }

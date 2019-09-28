@@ -1,6 +1,6 @@
 {
   "name": "wingbot-mssql",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "MSSQL storage for wingbot.ai",
   "main": "src/main.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "test:unit:watch": "npm run test:unit -- --watch",
     "test:cosmos": "cross-env DB_TYPE=cosmos mocha --opts ./test/mocha.opts ./test",
     "test:coverage": "nyc --reporter=html mocha --opts ./test/mocha.opts ./test && nyc report",
-    "test:coverage:threshold": "nyc check-coverage --lines 80 --functions 80 --branches 75",
+    "test:coverage:threshold": "nyc check-coverage --lines 75 --functions 65 --branches 70",
     "test:lint": "eslint ./src/**/*.js ./bin/**/*.js ./test/**/*.js ",
     "doc": "node ./bin/makeApiDoc.js"
   },
@@ -58,7 +58,6 @@
   },
   "dependencies": {
     "migrate": "^1.6.2",
-    "mongodb": "^3.3.2",
     "mssql": "^5.1.0",
     "sqlstring": "^2.3.1"
   }

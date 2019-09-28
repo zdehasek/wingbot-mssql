@@ -7,10 +7,15 @@ const ISODatePattern = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(([+-]\d\d:\d\d)|
 
 
 /**
- * @typedef {Object} State
+ * @typedef {object} State
  * @prop {string} senderId
  * @prop {string} pageId
- * @prop {Object} state
+ * @prop {object} state
+ */
+
+/**
+ * @typedef {object} StateCondition
+ * @prop {string} [search]
  */
 
 /**
@@ -85,7 +90,7 @@ class StateStorage {
 
         try {
             // not exists or conflict
-            await this._insertState(senderId, pageId, defaultState, now);
+            await this._insertState(cp, senderId, pageId, defaultState, now);
 
             return {
                 senderId,
@@ -130,7 +135,7 @@ class StateStorage {
         if (res.rowsAffected[0] === 0) {
             // nothing was updated so let's insert it
 
-            await this._insertState(senderId, pageId, state.state, 0, lastInteraction, off);
+            await this._insertState(cp, senderId, pageId, state.state, 0, lastInteraction, off);
         }
 
         return state;
@@ -158,8 +163,7 @@ class StateStorage {
         return JSON.stringify(obj);
     }
 
-    async _insertState (senderId, pageId, state, lock = 0, lastInteraction = null, off = false) {
-        const cp = await this._pool;
+    async _insertState (cp, senderId, pageId, state, lock = 0, lastInt = null, off = false) {
 
         return cp.request()
             .input('senderId', mssql.VarChar, senderId)
@@ -167,7 +171,7 @@ class StateStorage {
             .input('lock', mssql.BigInt, lock)
             .input('state', mssql.NVarChar, this._encodeState(state))
             .input('itsOff', mssql.VarChar, off ? 'true' : 'false')
-            .input('lastInteraction', mssql.BigInt, lastInteraction)
+            .input('lastInteraction', mssql.BigInt, lastInt)
             .query('INSERT INTO states (senderId, pageId, lock, state, itsOff, lastInteraction) VALUES (@senderId, @pageId, @lock, @state, @itsOff, @lastInteraction)');
     }
 
@@ -183,10 +187,9 @@ class StateStorage {
      * @returns {Promise<{data:State[],lastKey:string}>}
      */
     async getStates (condition = {}, limit = 20, lastKey = null) {
-        const c = await this._getCollection();
+        const cp = await this._pool;
 
-        let cursor;
-        const useCondition = {};
+        let lastInteraction = 0;
         let skip = 0;
 
         if (lastKey !== null) {
@@ -195,43 +198,41 @@ class StateStorage {
             if (key.skip) {
                 ({ skip } = key);
             } else {
-                Object.assign(useCondition, {
-                    lastInteraction: {
-                        $lte: new Date(key.lastInteraction)
-                    }
-                });
+                ({ lastInteraction } = key);
+                // Object.assign(useCondition, {
+                //     lastInteraction: {
+                //         $lte: new Date(key.lastInteraction)
+                //     }
+                // });
             }
         }
 
         const searchStates = typeof condition.search === 'string';
 
-        if (searchStates) {
-            if (this._doesNotSupportTextIndex) {
-                Object.assign(useCondition, {
-                    name: { $regex: condition.search, $options: 'i' }
-                });
-            } else {
-                Object.assign(useCondition, {
-                    $text: { $search: condition.search }
-                });
-            }
-            cursor = c
-                .find(useCondition)
-                .limit(limit + 1)
-                .skip(skip);
-            if (!this._doesNotSupportTextIndex) {
-                cursor
-                    .project({ score: { $meta: 'textScore' } })
-                    .sort({ score: { $meta: 'textScore' } });
-            }
-        } else {
-            cursor = c
-                .find(useCondition)
-                .limit(limit + 1)
-                .sort({ lastInteraction: -1 });
+        let where = '';
+
+        if (lastInteraction) {
+            where = 'WHERE lastInteraction <= @lastInteraction';
+        } else if (searchStates) {
+            where = 'WHERE';
         }
 
-        let data = await cursor.toArray();
+        if (searchStates && lastInteraction) {
+            where += ' AND';
+        }
+
+        if (searchStates) {
+            where += ' senderId LIKE @search';
+        }
+
+        const res = await cp.request()
+            .input('offset', mssql.BigInt, skip)
+            .input('limit', mssql.BigInt, limit + 1)
+            .input('lastInteraction', mssql.BigInt, lastInteraction)
+            .input('search', mssql.VarChar, `${condition.search}%`)
+            .query(`SELECT * FROM states ${where} ORDER BY lastInteraction DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`);
+
+        let { recordset: data } = res;
 
         let nextLastKey = null;
         if (limit !== null && data.length > limit) {
@@ -242,15 +243,16 @@ class StateStorage {
             } else {
                 const last = data[data.length - 1];
                 nextLastKey = Buffer.from(JSON.stringify({
-                    lastInteraction: last.lastInteraction.getTime()
+                    lastInteraction: last.lastInteraction
                 })).toString('base64');
             }
 
+            // @ts-ignore
             data = data.slice(0, limit);
         }
 
         return {
-            data: data.map(camp => this._mapState(camp)),
+            data: data.map((camp) => this._mapState(camp)),
             lastKey: nextLastKey
         };
     }
@@ -259,6 +261,17 @@ class StateStorage {
         if (!state) {
             return null;
         }
+
+        // eslint-disable-next-line no-param-reassign
+        state.state = this._decodeState(state.state);
+
+        // eslint-disable-next-line no-param-reassign
+        state.itsOff = state.itsOff === 'true' || state.itsOff === true;
+
+        // eslint-disable-next-line no-param-reassign
+        state.lastInteraction = new Date(typeof state.lastInteraction === 'string'
+            ? parseInt(state.lastInteraction, 10)
+            : state.lastInteraction);
 
         delete state._id; // eslint-disable-line
         delete state.lock; // eslint-disable-line

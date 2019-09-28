@@ -17,6 +17,8 @@ module.exports = {
 
         )`);
 
+        await this.query('CREATE INDEX lastInteraction ON states (lastInteraction DESC)');
+
         next();
     },
     async down (next) {

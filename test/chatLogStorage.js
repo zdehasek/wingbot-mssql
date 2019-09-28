@@ -37,8 +37,8 @@ describe('<ChatLogStorage>', function () {
         it('should return stored interactions', async () => {
             const timestamp = Date.now();
             const firstTs = timestamp - 1000;
-            await chl.log('abc', [{ response: 1 }], { req: 1 }, { pageId: '2', timestamp: firstTs });
-            await chl.log('abc', [{ response: 2 }], { req: 2 }, { pageId: '2', timestamp });
+            await chl.log('abc', [{ response: 1 }], { req: 1 }, { pageId: '2', timestamp: firstTs, flag: 'a' });
+            await chl.log('abc', [{ response: 2 }], { req: 2 }, { pageId: '2', timestamp, flag: 'b' });
 
             let data = await chl.getInteractions('abc', '2', 2);
 
@@ -53,6 +53,7 @@ describe('<ChatLogStorage>', function () {
                             response: 1
                         }
                     ],
+                    flag: 'a',
                     senderId: 'abc',
                     timestamp: firstTs
                 },
@@ -66,6 +67,7 @@ describe('<ChatLogStorage>', function () {
                             response: 2
                         }
                     ],
+                    flag: 'b',
                     senderId: 'abc',
                     timestamp
                 }
@@ -84,6 +86,7 @@ describe('<ChatLogStorage>', function () {
                             response: 1
                         }
                     ],
+                    flag: 'a',
                     senderId: 'abc',
                     timestamp: firstTs
                 }
@@ -102,6 +105,7 @@ describe('<ChatLogStorage>', function () {
                             response: 1
                         }
                     ],
+                    flag: 'a',
                     senderId: 'abc',
                     timestamp: firstTs
                 },
@@ -115,8 +119,28 @@ describe('<ChatLogStorage>', function () {
                             response: 2
                         }
                     ],
+                    flag: 'b',
                     senderId: 'abc',
                     timestamp
+                }
+            ]);
+
+            data = await chl.getInteractions('a', null, 2, null, firstTs);
+
+            assert.deepEqual(data, [
+                {
+                    pageId: '2',
+                    request: {
+                        req: 1
+                    },
+                    responses: [
+                        {
+                            response: 1
+                        }
+                    ],
+                    flag: 'a',
+                    senderId: 'abc',
+                    timestamp: firstTs
                 }
             ]);
         });

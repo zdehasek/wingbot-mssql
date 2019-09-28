@@ -143,6 +143,7 @@ describe('<StateStorage>', function () {
             let { data, lastKey } = await storage.getStates({}, 1);
 
             assert.deepEqual(data, [{
+                itsOff: false,
                 pageId: PAGE_ID,
                 senderId: SENDER_ID2,
                 state: data[0].state,
@@ -152,6 +153,7 @@ describe('<StateStorage>', function () {
             ({ data, lastKey } = await storage.getStates({}, 1, lastKey));
 
             assert.deepEqual(data, [{
+                itsOff: false,
                 pageId: PAGE_ID,
                 senderId: SENDER_ID,
                 state: data[0].state,
@@ -167,6 +169,7 @@ describe('<StateStorage>', function () {
             });
 
             assert.deepEqual(data, [{
+                itsOff: false,
                 pageId: PAGE_ID,
                 senderId: SENDER_ID2,
                 state: data[0].state,

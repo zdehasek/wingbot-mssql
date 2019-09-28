@@ -11,8 +11,7 @@ module.exports = {
         )`);
 
         // varchar(max) is invalid for use as a key column in an index
-        // @TODO FIX await query('CREATE CLUSTERED INDEX tokens_token ON tokens (token)');
-
+        await this.query('CREATE INDEX tokens_token ON tokens (token)');
 
         next();
     },

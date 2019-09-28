@@ -29,12 +29,12 @@ class ChatLogStorage {
      * all limits are inclusive
      *
      * @param {string} senderId
-     * @param {string} pageId
+     * @param {string} [pageId] - use null to treat senderId as flag
      * @param {number} [limit]
      * @param {number} [endAt] - iterate backwards to history
      * @param {number} [startAt] - iterate forward to last interaction
      */
-    async getInteractions (senderId, pageId, limit = 10, endAt = null, startAt = null) {
+    async getInteractions (senderId, pageId = null, limit = 10, endAt = null, startAt = null) {
 
         const cp = await this._pool;
         const r = cp.request();
@@ -44,30 +44,25 @@ class ChatLogStorage {
             : '';
 
         let query = `SELECT ${top}
-                    senderId, request, responses, pageId, timestamp, err
-                    FROM chatlogs 
-                    WHERE senderId=@senderId 
-                    AND pageId=@pageId`;
+                    senderId, request, responses, metadata, pageId, timestamp, err
+                    FROM chatlogs
+                    WHERE `;
 
-        const q = {
-            senderId,
-            pageId
-        };
+        if (pageId) {
+            query += `senderId=@senderId
+                AND pageId=@pageId`;
+        } else {
+            query += 'flag=@senderId';
+        }
 
         const orderBackwards = startAt && !endAt;
 
-        if (startAt || endAt) {
-            Object.assign(q, { timestamp: {} });
-        }
-
         if (startAt) {
-            Object.assign(q.timestamp, { $gte: startAt });
             r.input('startAt', mssql.BigInt, startAt);
             query += ' AND timestamp >= @startAt';
         }
 
         if (endAt) {
-            Object.assign(q.timestamp, { $lte: endAt });
             r.input('endAt', mssql.VarChar, endAt);
             query += ' AND timestamp <= @endAt';
 
@@ -75,13 +70,10 @@ class ChatLogStorage {
 
         query += ' ORDER BY timestamp';
 
-        // orderBackwards
-        if (startAt && !endAt) {
+        if (orderBackwards) {
             query += ' ASC';
-
         } else {
             query += ' DESC';
-
         }
 
         let { recordset } = await r
@@ -97,6 +89,12 @@ class ChatLogStorage {
             o.request = JSON.parse(o.request);
             // eslint-disable-next-line no-param-reassign
             o.timestamp = JSON.parse(o.timestamp);
+
+            Object.assign(o, JSON.parse(o.metadata));
+
+            // eslint-disable-next-line no-param-reassign
+            delete o.metadata;
+
             if (o.err === null) {
                 delete o.err; // eslint-disable-line no-param-reassign
             }
@@ -115,9 +113,9 @@ class ChatLogStorage {
      * Log single event
      *
      * @param {string} senderId
-     * @param {Object[]} responses - list of sent responses
-     * @param {Object} request - event request
-     * @param {Object} [metadata] - request metadata
+     * @param {object[]} responses - list of sent responses
+     * @param {object} request - event request
+     * @param {object} [metadata] - request metadata
      * @returns {Promise}
      */
     log (senderId, responses = [], request = {}, metadata = {}) {
@@ -131,18 +129,20 @@ class ChatLogStorage {
         Object.assign(log, metadata);
 
         const query = `
-                    INSERT INTO chatlogs 
-                        (senderId, time, request, responses, pageId, timestamp, err) 
+                    INSERT INTO chatlogs
+                        (senderId, time, request, responses, pageId, metadata, flag, timestamp, err)
                     VALUES
-                        (@senderId, @time, @request, @responses, @pageId, @timestamp, @err)`;
+                        (@senderId, @time, @request, @responses, @pageId, @metadata, @flag, @timestamp, @err)`;
 
 
         return this._pool
-            .then(pool => pool.request()
+            .then((pool) => pool.request()
                 .input('senderId', mssql.VarChar, log.senderId)
                 .input('time', mssql.VarChar, log.time)
                 .input('request', mssql.NVarChar, JSON.stringify(log.request))
                 .input('responses', mssql.NVarChar, JSON.stringify(log.responses))
+                .input('metadata', mssql.NVarChar, JSON.stringify(metadata))
+                .input('flag', mssql.VarChar, typeof metadata.flag === 'string' ? metadata.flag : null)
                 .input('pageId', mssql.VarChar, log.pageId || null)
                 .input('timestamp', mssql.VarChar, log.timestamp || null)
                 .input('err', mssql.VarChar, log.err || null)
@@ -163,9 +163,9 @@ class ChatLogStorage {
      * @name ChatLog#error
      * @param {any} err - error
      * @param {string} senderId
-     * @param {Object[]} [responses] - list of sent responses
-     * @param {Object} [request] - event request
-     * @param {Object} [metadata] - request metadata
+     * @param {object[]} [responses] - list of sent responses
+     * @param {object} [request] - event request
+     * @param {object} [metadata] - request metadata
      * @returns {Promise}
      */
     error (err, senderId, responses = [], request = {}, metadata = {}) {
@@ -179,18 +179,20 @@ class ChatLogStorage {
 
         Object.assign(log, metadata);
 
-        const query = `INSERT INTO chatlogs 
-                        (senderId, time, request, responses, pageId, timestamp, err) 
+        const query = `INSERT INTO chatlogs
+                        (senderId, time, request, responses, pageId, metadata, flag, timestamp, err)
                     VALUES
-                        (@senderId, @time, @request, @responses, @pageId, @timestamp, @err)`;
+                        (@senderId, @time, @request, @responses, @pageId, @metadata, @flag, @timestamp, @err)`;
 
 
         return this._pool
-            .then(pool => pool.request()
+            .then((pool) => pool.request()
                 .input('senderId', mssql.VarChar, log.senderId)
                 .input('time', mssql.VarChar, log.time)
                 .input('request', mssql.NVarChar, JSON.stringify(log.request))
                 .input('responses', mssql.NVarChar, JSON.stringify(log.responses))
+                .input('metadata', mssql.NVarChar, JSON.stringify(metadata))
+                .input('flag', mssql.VarChar, typeof metadata.flag === 'string' ? metadata.flag : null)
                 .input('pageId', mssql.VarChar, log.pageId || null)
                 .input('timestamp', mssql.VarChar, log.timestamp || null)
                 .input('err', mssql.VarChar, log.err || null)

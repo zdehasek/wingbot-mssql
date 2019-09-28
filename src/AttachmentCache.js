@@ -46,16 +46,10 @@ class AttachmentCache {
         const cp = await this._pool;
         const r = cp.request();
 
-        try {
-            await r
-                .input('url', mssql.VarChar, url)
-                .input('attachmentId', mssql.Int, attachmentId)
-                .query('UPDATE attachments SET id = @url, attachmentId = @attachmentId WHERE id = @url');
-
-        } catch (e) {
-
-            throw e;
-        }
+        await r
+            .input('url', mssql.VarChar, url)
+            .input('attachmentId', mssql.Int, attachmentId)
+            .query('UPDATE attachments SET id = @url, attachmentId = @attachmentId WHERE id = @url');
 
         return true;
     }
