@@ -5,6 +5,8 @@ const pool = require('./testpool');
 
 const BotConfigStorage = require('../src/BotConfigStorage');
 
+const T = require('./long.json');
+
 describe('<BotConfigStorage>', () => {
 
     /** @type {BotConfigStorage} */
@@ -29,14 +31,30 @@ describe('<BotConfigStorage>', () => {
         assert.strictEqual(res2, null);
     });
 
-    it('should be able to store and fetch, invalidate and update config under same timestamp', async () => {
-        // @TODO save array to the blocks
-        const cfgObj = { blocks: 123 };
+    it('is able to update config', async () => {
+        const cfgObj = { blocks: [{ obj: '1' }] };
 
         // save config
         const savedConfig = await botConfigStorage.updateConfig(cfgObj);
 
-        assert.strictEqual(savedConfig.blocks, cfgObj.blocks);
+        assert.deepEqual(savedConfig.blocks, cfgObj.blocks);
+
+        const cfgObj2 = { blocks: [{ obj: '2' }] };
+
+        // save config
+        const savedConfig2 = await botConfigStorage.updateConfig(cfgObj2);
+
+        assert.deepEqual(savedConfig2.blocks, cfgObj2.blocks);
+
+    });
+
+    it('should be able to store and fetch, invalidate and update config under same timestamp', async () => {
+        const cfgObj = { blocks: [{ obj: '1\n2' }, T] };
+
+        // save config
+        const savedConfig = await botConfigStorage.updateConfig(cfgObj);
+
+        assert.deepEqual(savedConfig.blocks, cfgObj.blocks);
 
         // check for config timestamp
         const ts = await botConfigStorage.getConfigTimestamp();

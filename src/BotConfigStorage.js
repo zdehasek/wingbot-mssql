@@ -29,13 +29,13 @@ class BotConfigStorage {
         const cp = await this._pool;
         const r = cp.request();
 
-        await r
+        const res = await r
             .input('CONFIG_ID', mssql.VarChar, CONFIG_ID)
-            .input('blocks', mssql.Int, newConfig.blocks)
+            .input('blocks', mssql.Text, Buffer.from(JSON.stringify(newConfig.blocks)).toString('base64'))
             .input('timestamp', mssql.BigInt, newConfig.timestamp)
-            .query('UPDATE attachments SET id = @url, attachmentId = @attachmentId WHERE id = @CONFIG_ID');
+            .query('UPDATE botConfigStorage SET timestamp = @timestamp, blocks = @blocks WHERE id = @CONFIG_ID');
 
-        return true;
+        return res.rowsAffected[0] === 1;
     }
 
     /**
@@ -86,7 +86,6 @@ class BotConfigStorage {
             .query('SELECT timestamp FROM botConfigStorage WHERE botConfigStorage.id=@CONFIG_ID');
 
         const [res] = recordset;
-        // @TODO JSON.parse a vsude jinde kde pouzivam  Number
 
         return res ? Number(res.timestamp) : 0;
     }
@@ -102,15 +101,15 @@ class BotConfigStorage {
         const cp = await this._pool;
         const r = cp.request();
 
-        const oldconfig = await this.getConfig();
+        const up = await this._simpleUpdate(newConfig);
 
-        if (!oldconfig) {
+        if (!up) {
 
             try {
                 await r
                     .input('CONFIG_ID', mssql.VarChar, CONFIG_ID)
                     // @ts-ignore
-                    .input('blocks', mssql.Text, newConfig.blocks || [])
+                    .input('blocks', mssql.Text, Buffer.from(JSON.stringify(newConfig.blocks)).toString('base64'))
                     // @ts-ignore
                     .input('timestamp', mssql.BigInt, newConfig.timestamp)
                     .query('INSERT INTO botConfigStorage (id, blocks, timestamp) VALUES (@CONFIG_ID, @blocks, @timestamp);');
@@ -125,9 +124,6 @@ class BotConfigStorage {
                 }
             }
 
-        } else {
-
-            await this._simpleUpdate(newConfig);
         }
 
         return newConfig;
@@ -147,7 +143,25 @@ class BotConfigStorage {
 
         const [res] = recordset;
 
-        return res ? { blocks: Number(res.blocks), timestamp: Number(res.timestamp) } : null;
+        // if (res) {
+        //     const q = res.blocks.substring(1520, 1590);
+
+        //     console.log(q);
+        // }
+
+        if (res) {
+            try {
+                const ret = {
+                    blocks: JSON.parse(Buffer.from(res.blocks, 'base64').toString('utf8')),
+                    timestamp: Number(res.timestamp)
+                };
+                return ret;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        return null;
 
     }
 

@@ -8,7 +8,7 @@ module.exports = {
             blocks text,
             timestamp bigint
 
-            CONSTRAINT PK_botConfigStorage PRIMARY KEY NONCLUSTERED (id)
+            CONSTRAINT PK_botConfigStorage PRIMARY KEY (id)
         )`);
 
         next();
