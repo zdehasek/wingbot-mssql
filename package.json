@@ -1,6 +1,6 @@
 {
   "name": "wingbot-mssql",
-  "version": "1.0.0-alpha.5",
+  "version": "1.0.0",
   "description": "MSSQL storage for wingbot.ai",
   "main": "src/main.js",
   "scripts": {

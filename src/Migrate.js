@@ -85,6 +85,7 @@ class Migrate {
             loadMigrationsIntoSet({
                 set,
                 store: this,
+                ignoreMissing: true,
                 migrationsDirectory: this._migrationsPath
             }, (err) => {
                 if (err) {
